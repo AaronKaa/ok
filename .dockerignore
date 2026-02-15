@@ -1,0 +1,30 @@
+# Binaries
+ok
+*.exe
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+LICENSE
+
+# Environment files (don't include secrets in image)
+.env
+.env.*
+!.env.example
+
+# Test files
+*_test.go
