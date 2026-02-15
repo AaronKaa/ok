@@ -13,8 +13,8 @@ func TestCheckDefinition_IsCritical(t *testing.T) {
 		want     bool
 	}{
 		{"nil defaults to true", nil, true},
-		{"explicit true", ptr(true), true},
-		{"explicit false", ptr(false), false},
+		{"explicit true", new(true), true},
+		{"explicit false", new(false), false},
 	}
 
 	for _, tt := range tests {
@@ -163,4 +163,5 @@ func clearEnv() {
 	}
 }
 
-func ptr(b bool) *bool { return &b }
+//go:fix inline
+func ptr(b bool) *bool { return new(b) }

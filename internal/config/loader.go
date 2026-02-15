@@ -122,8 +122,8 @@ func parseChecksEnv(envName, value string) ([]CheckDefinition, error) {
 	}
 
 	suffix := ""
-	if strings.HasPrefix(envName, "CHECKS_") {
-		suffix = strings.ToLower(strings.TrimPrefix(envName, "CHECKS_"))
+	if after, ok := strings.CutPrefix(envName, "CHECKS_"); ok {
+		suffix = strings.ToLower(after)
 	}
 
 	for i := range checks {
