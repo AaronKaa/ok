@@ -4,7 +4,7 @@ A lightweight health check aggregator that runs inside your container. Point it 
 
 ## Why?
 
-Container orchestrators need a single health endpoint to probe. But your app probably depends on a database, maybe a cache, an external API or two. Rather than building health check logic into every service, `ok` handles it for you.
+I wanted all of my health checks in one place and in the same format... I found it nice ot have a mini health dashboard for projects during dev too... 
 
 ## Quick Start
 
