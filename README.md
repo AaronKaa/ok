@@ -1,4 +1,5 @@
 # ok
+[![CI/CD](https://github.com/AaronKaa/ok/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/AaronKaa/ok/actions/workflows/docker-publish.yml)
 
 A lightweight health check aggregator that runs inside your container. Point it at your dependencies, and it'll give you a single endpoint that reports whether everything is healthy.
 
