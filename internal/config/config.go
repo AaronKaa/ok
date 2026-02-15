@@ -6,6 +6,18 @@ type Config struct {
 	Port            int
 	RefreshInterval time.Duration
 	Checks          []CheckDefinition
+	Webhook         WebhookConfig
+}
+
+type WebhookConfig struct {
+	URL             string
+	Continuous      bool   // If true, fire on every failure; if false, only on state changes
+	AuthType        string // "none", "basic", "bearer", "header"
+	AuthUser        string // For basic auth
+	AuthPass        string // For basic auth
+	AuthToken       string // For bearer auth
+	AuthHeaderName  string // For custom header auth
+	AuthHeaderValue string // For custom header auth
 }
 
 type CheckDefinition struct {

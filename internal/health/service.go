@@ -7,18 +7,28 @@ import (
 	"time"
 )
 
-type Service struct {
-	checks  map[string]Check
-	results map[string]Result
-	checker Checker
-	mu      sync.RWMutex
+type Notifier interface {
+	Enabled() bool
+	Continuous() bool
+	Notify(status, previousStatus Status, failedChecks []Result)
 }
 
-func NewService(checks []Check, checker Checker) *Service {
+type Service struct {
+	checks         map[string]Check
+	results        map[string]Result
+	checker        Checker
+	notifier       Notifier
+	previousStatus Status
+	mu             sync.RWMutex
+}
+
+func NewService(checks []Check, checker Checker, notifier Notifier) *Service {
 	s := &Service{
-		checks:  make(map[string]Check),
-		results: make(map[string]Result),
-		checker: checker,
+		checks:         make(map[string]Check),
+		results:        make(map[string]Result),
+		checker:        checker,
+		notifier:       notifier,
+		previousStatus: StatusPass,
 	}
 
 	for _, check := range checks {
@@ -62,7 +72,6 @@ func (s *Service) Execute(ctx context.Context, checkID string) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	result := s.results[checkID]
 	result.LastCheck = time.Now()
@@ -79,12 +88,48 @@ func (s *Service) Execute(ctx context.Context, checkID string) {
 
 	s.results[checkID] = result
 
+	newStatus := s.aggregateStatusLocked()
+	previousStatus := s.previousStatus
+	statusChanged := newStatus != previousStatus
+	s.previousStatus = newStatus
+
+	var failedChecks []Result
+	if newStatus != StatusPass {
+		for _, r := range s.results {
+			if r.Status != StatusPass {
+				failedChecks = append(failedChecks, r)
+			}
+		}
+	}
+
+	s.mu.Unlock()
+
 	slog.Info("check completed",
 		"check_id", checkID,
 		"status", result.Status,
 		"duration", duration,
 		"message", message,
 	)
+
+	s.maybeNotify(newStatus, previousStatus, statusChanged, failedChecks)
+}
+
+func (s *Service) maybeNotify(status, previousStatus Status, changed bool, failedChecks []Result) {
+	if s.notifier == nil || !s.notifier.Enabled() {
+		return
+	}
+
+	shouldNotify := false
+
+	if changed {
+		shouldNotify = true
+	} else if s.notifier.Continuous() && status != StatusPass {
+		shouldNotify = true
+	}
+
+	if shouldNotify {
+		s.notifier.Notify(status, previousStatus, failedChecks)
+	}
 }
 
 func (s *Service) Results() []Result {
@@ -109,7 +154,10 @@ func (s *Service) Result(checkID string) (Result, bool) {
 func (s *Service) AggregateStatus() Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.aggregateStatusLocked()
+}
 
+func (s *Service) aggregateStatusLocked() Status {
 	hasDegraded := false
 
 	for _, result := range s.results {

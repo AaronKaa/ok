@@ -14,6 +14,7 @@ import (
 	"github.com/AaronKaa/ok/internal/health"
 	"github.com/AaronKaa/ok/internal/scheduler"
 	"github.com/AaronKaa/ok/internal/server"
+	"github.com/AaronKaa/ok/internal/webhook"
 )
 
 type App struct {
@@ -56,7 +57,17 @@ func NewApp() (*App, error) {
 
 	httpTimeout := 10 * time.Second
 	checker := health.NewHTTPChecker(httpTimeout)
-	service := health.NewService(checks, checker)
+
+	webhookClient := webhook.New(cfg.Webhook)
+	if webhookClient.Enabled() {
+		slog.Info("webhook enabled",
+			"url", cfg.Webhook.URL,
+			"continuous", cfg.Webhook.Continuous,
+			"auth_type", cfg.Webhook.AuthType,
+		)
+	}
+
+	service := health.NewService(checks, checker, webhookClient)
 
 	sched := scheduler.New(service)
 	handler := server.NewHandler(service, cfg.RefreshInterval)

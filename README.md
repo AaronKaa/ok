@@ -5,7 +5,7 @@ A lightweight health check aggregator that runs inside your container. Point it 
 
 ## Why?
 
-I wanted all of my health checks in one place and in the same format... I found it nice ot have a mini health dashboard for projects during dev too... 
+I wanted all of my health checks in one place and in the same format... I found it nice to have a mini health dashboard for projects during dev too... 
 
 ## Quick Start
 
@@ -172,3 +172,85 @@ A check can be in one of three states:
 - **fail**: Critical check failed beyond retry count
 
 The aggregate status follows the worst state: if any critical check is failing, the aggregate is `fail`. If any check is degraded (but none failing), the aggregate is `degraded`. Otherwise, it's `pass`.
+
+## Webhooks
+
+Send notifications when health status changes. Webhooks fire when the aggregate status transitions (e.g., pass → fail, fail → pass).
+
+### Webhook Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WEBHOOK_URL` | | URL to POST notifications to |
+| `WEBHOOK_CONTINUOUS` | `false` | If `true`, fire on every check while unhealthy (not just on state change) |
+| `WEBHOOK_AUTH_TYPE` | `none` | Authentication type: `none`, `basic`, `bearer`, or `header` |
+| `WEBHOOK_AUTH_USER` | | Username for basic auth |
+| `WEBHOOK_AUTH_PASS` | | Password for basic auth |
+| `WEBHOOK_AUTH_TOKEN` | | Token for bearer auth |
+| `WEBHOOK_AUTH_HEADER_NAME` | | Header name for custom header auth |
+| `WEBHOOK_AUTH_HEADER_VALUE` | | Header value for custom header auth |
+
+### Webhook Payload
+
+```json
+{
+  "status": "fail",
+  "previous_status": "pass",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "failed_checks": [
+    {
+      "id": "db",
+      "title": "Database",
+      "status": "fail",
+      "critical": true,
+      "message": "connection refused",
+      "consecutive_failures": 3,
+      "duration_ms": 150.5
+    }
+  ]
+}
+```
+
+### Authentication Examples
+
+No authentication:
+```bash
+WEBHOOK_URL=https://hooks.example.com/health
+```
+
+Basic auth:
+```bash
+WEBHOOK_URL=https://hooks.example.com/health
+WEBHOOK_AUTH_TYPE=basic
+WEBHOOK_AUTH_USER=myuser
+WEBHOOK_AUTH_PASS=mypassword
+```
+
+Bearer token:
+```bash
+WEBHOOK_URL=https://hooks.example.com/health
+WEBHOOK_AUTH_TYPE=bearer
+WEBHOOK_AUTH_TOKEN=my-secret-token
+```
+
+Custom header (e.g., API key):
+```bash
+WEBHOOK_URL=https://hooks.example.com/health
+WEBHOOK_AUTH_TYPE=header
+WEBHOOK_AUTH_HEADER_NAME=X-API-Key
+WEBHOOK_AUTH_HEADER_VALUE=my-api-key
+```
+
+### Docker Compose with Webhook
+
+```yaml
+services:
+  ok:
+    image: aarcarr/ok:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - CHECKS_API={"title":"API","url":"http://api:8080/health"}
+      - WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+      - WEBHOOK_AUTH_TYPE=none
+```

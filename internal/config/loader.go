@@ -41,7 +41,28 @@ func Load() (*Config, error) {
 	}
 	cfg.Checks = checks
 
+	cfg.Webhook = loadWebhook()
+
 	return cfg, nil
+}
+
+func loadWebhook() WebhookConfig {
+	webhook := WebhookConfig{
+		URL:             os.Getenv("WEBHOOK_URL"),
+		Continuous:      os.Getenv("WEBHOOK_CONTINUOUS") == "true",
+		AuthType:        os.Getenv("WEBHOOK_AUTH_TYPE"),
+		AuthUser:        os.Getenv("WEBHOOK_AUTH_USER"),
+		AuthPass:        os.Getenv("WEBHOOK_AUTH_PASS"),
+		AuthToken:       os.Getenv("WEBHOOK_AUTH_TOKEN"),
+		AuthHeaderName:  os.Getenv("WEBHOOK_AUTH_HEADER_NAME"),
+		AuthHeaderValue: os.Getenv("WEBHOOK_AUTH_HEADER_VALUE"),
+	}
+
+	if webhook.AuthType == "" {
+		webhook.AuthType = "none"
+	}
+
+	return webhook
 }
 
 func loadChecks() ([]CheckDefinition, error) {
