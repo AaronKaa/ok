@@ -21,6 +21,32 @@ export CHECKS='[
 
 Then hit `http://localhost:8080/health` to see the aggregate status.
 
+## Docker Compose
+
+```yaml
+services:
+  ok:
+    image: aarcarr/ok:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - CHECKS_API={"title":"API","url":"http://api:8080/health"}
+      - CHECKS_DB={"title":"Database","url":"http://db:5432/health","interval":"60s"}
+      - CHECKS_REDIS={"title":"Redis","url":"http://redis:6379/health","critical":false}
+```
+
+Or with an env file:
+
+```yaml
+services:
+  ok:
+    image: aarcarr/ok:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+```
+
 ## Configuration
 
 ### Server Settings
