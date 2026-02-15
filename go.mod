@@ -1,6 +1,6 @@
 module github.com/AaronKaa/ok
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/tidwall/gjson v1.18.0
