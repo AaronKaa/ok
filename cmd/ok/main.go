@@ -43,20 +43,35 @@ func NewApp() (*App, error) {
 	)
 
 	checks := make([]health.Check, len(cfg.Checks))
+	hasDockerChecks := false
 	for i, def := range cfg.Checks {
 		checks[i] = health.NewCheck(def)
+		if def.Type == config.CheckTypeDocker {
+			hasDockerChecks = true
+		}
 
 		slog.Debug("registered check",
 			"id", checks[i].ID,
+			"type", checks[i].Type,
 			"title", checks[i].Title,
-			"url", checks[i].URL,
 			"interval", checks[i].Interval,
 			"critical", checks[i].Critical,
 		)
 	}
 
+	checkers := make(map[config.CheckType]health.Checker)
+
 	httpTimeout := 10 * time.Second
-	checker := health.NewHTTPChecker(httpTimeout)
+	checkers[config.CheckTypeHTTP] = health.NewHTTPChecker(httpTimeout)
+
+	if hasDockerChecks {
+		dockerChecker, err := health.NewDockerChecker()
+		if err != nil {
+			return nil, err
+		}
+		checkers[config.CheckTypeDocker] = dockerChecker
+		slog.Info("docker checker enabled")
+	}
 
 	webhookClient := webhook.New(cfg.Webhook)
 	if webhookClient.Enabled() {
@@ -67,7 +82,7 @@ func NewApp() (*App, error) {
 		)
 	}
 
-	service := health.NewService(checks, checker, webhookClient)
+	service := health.NewService(checks, checkers, webhookClient)
 
 	sched := scheduler.New(service)
 	handler := server.NewHandler(service, cfg.RefreshInterval)

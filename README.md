@@ -48,6 +48,29 @@ services:
       - .env
 ```
 
+With Docker native health checks:
+
+```yaml
+services:
+  mysql:
+    image: mysql:8
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  ok:
+    image: aarcarr/ok:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CHECKS_MYSQL={"title":"MySQL","type":"docker","container":"mysql"}
+      - CHECKS_API={"title":"API","url":"http://api:8080/health"}
+```
+
 ## Configuration
 
 ### Server Settings
@@ -70,11 +93,21 @@ CHECKS_DB='{"title": "Database", "url": "http://db:5432/health"}'
 CHECKS_REDIS='{"title": "Cache", "url": "http://redis:6379/health"}'
 ```
 
-### Check Options
+### Check Types
+
+ok supports two types of health checks:
+
+| Type | Description |
+|------|-------------|
+| `http` | HTTP endpoint checks (default) |
+| `docker` | Docker container native health checks |
+
+### HTTP Check Options
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `title` | *required* | Display name for the check |
+| `type` | `http` | Check type |
 | `url` | *required* | HTTP(S) endpoint to probe |
 | `method` | `GET` | HTTP method |
 | `interval` | `30s` | How often to run the check |
@@ -84,7 +117,18 @@ CHECKS_REDIS='{"title": "Cache", "url": "http://redis:6379/health"}'
 | `critical` | `true` | Whether failure should mark the aggregate as failed |
 | `retries` | `0` | Number of failures before marking as failed |
 
-### Examples
+### Docker Check Options
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `title` | *required* | Display name for the check |
+| `type` | | Must be `docker` |
+| `container` | *required* | Container name or ID |
+| `interval` | `30s` | How often to run the check |
+| `critical` | `true` | Whether failure should mark the aggregate as failed |
+| `retries` | `0` | Number of failures before marking as failed |
+
+### HTTP Check Examples
 
 Basic health check:
 ```json
@@ -119,6 +163,19 @@ Check with retries (tolerates brief outages):
   "retries": 2
 }
 ```
+
+### Docker Check Examples
+
+Monitor a container's native Docker health check:
+```json
+{
+  "title": "MySQL",
+  "type": "docker",
+  "container": "mysql"
+}
+```
+
+Docker checks read the container's health status from Docker's API. The container must have a `HEALTHCHECK` defined in its Dockerfile or compose file. If no healthcheck is configured, ok considers a running container as healthy.
 
 ## Endpoints
 

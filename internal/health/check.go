@@ -8,6 +8,7 @@ import (
 
 type Check struct {
 	ID           string
+	Type         config.CheckType
 	Title        string
 	URL          string
 	Method       string
@@ -17,11 +18,13 @@ type Check struct {
 	JSONEquals   string
 	Critical     bool
 	Retries      int
+	Container    string
 }
 
 func NewCheck(def config.CheckDefinition) Check {
 	return Check{
 		ID:           def.ID,
+		Type:         def.Type,
 		Title:        def.Title,
 		URL:          def.URL,
 		Method:       def.Method,
@@ -31,5 +34,6 @@ func NewCheck(def config.CheckDefinition) Check {
 		JSONEquals:   def.JSONEquals,
 		Critical:     def.IsCritical(),
 		Retries:      def.Retries,
+		Container:    def.Container,
 	}
 }

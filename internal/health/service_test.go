@@ -3,6 +3,8 @@ package health
 import (
 	"context"
 	"testing"
+
+	"github.com/AaronKaa/ok/internal/config"
 )
 
 type mockChecker struct {
@@ -13,6 +15,12 @@ type mockChecker struct {
 
 func (m *mockChecker) Execute(ctx context.Context, check Check) (bool, string, error) {
 	return m.passed, m.message, m.err
+}
+
+func mockCheckers(checker Checker) map[config.CheckType]Checker {
+	return map[config.CheckType]Checker{
+		config.CheckTypeHTTP: checker,
+	}
 }
 
 type mockNotifier struct {
@@ -35,13 +43,13 @@ func (m *mockNotifier) Notify(status, previousStatus Status, failedChecks []Resu
 
 func TestService_Execute(t *testing.T) {
 	checks := []Check{
-		{ID: "test1", Title: "Test 1", Critical: true, Retries: 0},
-		{ID: "test2", Title: "Test 2", Critical: false, Retries: 1},
+		{ID: "test1", Type: config.CheckTypeHTTP, Title: "Test 1", Critical: true, Retries: 0},
+		{ID: "test2", Type: config.CheckTypeHTTP, Title: "Test 2", Critical: false, Retries: 1},
 	}
 
 	t.Run("successful check", func(t *testing.T) {
 		checker := &mockChecker{passed: true, message: "ok"}
-		svc := NewService(checks, checker, nil)
+		svc := NewService(checks, mockCheckers(checker), nil)
 
 		svc.Execute(context.Background(), "test1")
 
@@ -59,7 +67,7 @@ func TestService_Execute(t *testing.T) {
 
 	t.Run("failed critical check", func(t *testing.T) {
 		checker := &mockChecker{passed: false, message: "error"}
-		svc := NewService(checks, checker, nil)
+		svc := NewService(checks, mockCheckers(checker), nil)
 
 		svc.Execute(context.Background(), "test1")
 
@@ -74,7 +82,7 @@ func TestService_Execute(t *testing.T) {
 
 	t.Run("failed non-critical check", func(t *testing.T) {
 		checker := &mockChecker{passed: false, message: "error"}
-		svc := NewService(checks, checker, nil)
+		svc := NewService(checks, mockCheckers(checker), nil)
 
 		svc.Execute(context.Background(), "test2")
 
@@ -86,7 +94,7 @@ func TestService_Execute(t *testing.T) {
 
 	t.Run("recovery resets failures", func(t *testing.T) {
 		checker := &mockChecker{passed: false, message: "error"}
-		svc := NewService(checks, checker, nil)
+		svc := NewService(checks, mockCheckers(checker), nil)
 
 		svc.Execute(context.Background(), "test1")
 		svc.Execute(context.Background(), "test1")
@@ -111,13 +119,13 @@ func TestService_Execute(t *testing.T) {
 
 func TestService_AggregateStatus(t *testing.T) {
 	checks := []Check{
-		{ID: "critical", Title: "Critical", Critical: true},
-		{ID: "non-critical", Title: "Non-Critical", Critical: false},
+		{ID: "critical", Type: config.CheckTypeHTTP, Title: "Critical", Critical: true},
+		{ID: "non-critical", Type: config.CheckTypeHTTP, Title: "Non-Critical", Critical: false},
 	}
 
 	t.Run("all pass", func(t *testing.T) {
 		checker := &mockChecker{passed: true}
-		svc := NewService(checks, checker, nil)
+		svc := NewService(checks, mockCheckers(checker), nil)
 
 		svc.Execute(context.Background(), "critical")
 		svc.Execute(context.Background(), "non-critical")
@@ -128,10 +136,11 @@ func TestService_AggregateStatus(t *testing.T) {
 	})
 
 	t.Run("critical fails", func(t *testing.T) {
-		svc := NewService(checks, &mockChecker{passed: true}, nil)
+		checker := &mockChecker{passed: true}
+		svc := NewService(checks, mockCheckers(checker), nil)
 		svc.Execute(context.Background(), "non-critical")
 
-		svc.checker = &mockChecker{passed: false}
+		checker.passed = false
 		svc.Execute(context.Background(), "critical")
 
 		if status := svc.AggregateStatus(); status != StatusFail {
@@ -140,13 +149,11 @@ func TestService_AggregateStatus(t *testing.T) {
 	})
 
 	t.Run("non-critical fails only", func(t *testing.T) {
-		passChecker := &mockChecker{passed: true}
-		failChecker := &mockChecker{passed: false}
-
-		svc := NewService(checks, passChecker, nil)
+		checker := &mockChecker{passed: true}
+		svc := NewService(checks, mockCheckers(checker), nil)
 		svc.Execute(context.Background(), "critical")
 
-		svc.checker = failChecker
+		checker.passed = false
 		svc.Execute(context.Background(), "non-critical")
 
 		if status := svc.AggregateStatus(); status != StatusDegraded {
@@ -157,11 +164,11 @@ func TestService_AggregateStatus(t *testing.T) {
 
 func TestService_Results(t *testing.T) {
 	checks := []Check{
-		{ID: "a", Title: "A"},
-		{ID: "b", Title: "B"},
+		{ID: "a", Type: config.CheckTypeHTTP, Title: "A"},
+		{ID: "b", Type: config.CheckTypeHTTP, Title: "B"},
 	}
 
-	svc := NewService(checks, &mockChecker{passed: true}, nil)
+	svc := NewService(checks, mockCheckers(&mockChecker{passed: true}), nil)
 	results := svc.Results()
 
 	if len(results) != 2 {
@@ -171,11 +178,11 @@ func TestService_Results(t *testing.T) {
 
 func TestService_Checks(t *testing.T) {
 	checks := []Check{
-		{ID: "a", Title: "A"},
-		{ID: "b", Title: "B"},
+		{ID: "a", Type: config.CheckTypeHTTP, Title: "A"},
+		{ID: "b", Type: config.CheckTypeHTTP, Title: "B"},
 	}
 
-	svc := NewService(checks, &mockChecker{}, nil)
+	svc := NewService(checks, mockCheckers(&mockChecker{}), nil)
 	got := svc.Checks()
 
 	if len(got) != 2 {
@@ -185,13 +192,13 @@ func TestService_Checks(t *testing.T) {
 
 func TestService_Notifications(t *testing.T) {
 	checks := []Check{
-		{ID: "test", Title: "Test", Critical: true},
+		{ID: "test", Type: config.CheckTypeHTTP, Title: "Test", Critical: true},
 	}
 
 	t.Run("notifies on state change to fail", func(t *testing.T) {
 		notifier := &mockNotifier{enabled: true}
 		checker := &mockChecker{passed: false}
-		svc := NewService(checks, checker, notifier)
+		svc := NewService(checks, mockCheckers(checker), notifier)
 
 		svc.Execute(context.Background(), "test")
 
@@ -212,7 +219,7 @@ func TestService_Notifications(t *testing.T) {
 	t.Run("notifies on state change to pass", func(t *testing.T) {
 		notifier := &mockNotifier{enabled: true}
 		checker := &mockChecker{passed: false}
-		svc := NewService(checks, checker, notifier)
+		svc := NewService(checks, mockCheckers(checker), notifier)
 
 		svc.Execute(context.Background(), "test") // fail
 		checker.passed = true
@@ -229,7 +236,7 @@ func TestService_Notifications(t *testing.T) {
 	t.Run("does not notify when no state change", func(t *testing.T) {
 		notifier := &mockNotifier{enabled: true}
 		checker := &mockChecker{passed: false}
-		svc := NewService(checks, checker, notifier)
+		svc := NewService(checks, mockCheckers(checker), notifier)
 
 		svc.Execute(context.Background(), "test") // fail (notifies)
 		svc.Execute(context.Background(), "test") // still fail (no notify)
@@ -242,7 +249,7 @@ func TestService_Notifications(t *testing.T) {
 	t.Run("continuous mode notifies on every failure", func(t *testing.T) {
 		notifier := &mockNotifier{enabled: true, continuous: true}
 		checker := &mockChecker{passed: false}
-		svc := NewService(checks, checker, notifier)
+		svc := NewService(checks, mockCheckers(checker), notifier)
 
 		svc.Execute(context.Background(), "test") // fail
 		svc.Execute(context.Background(), "test") // still fail
@@ -255,7 +262,7 @@ func TestService_Notifications(t *testing.T) {
 	t.Run("disabled notifier does not notify", func(t *testing.T) {
 		notifier := &mockNotifier{enabled: false}
 		checker := &mockChecker{passed: false}
-		svc := NewService(checks, checker, notifier)
+		svc := NewService(checks, mockCheckers(checker), notifier)
 
 		svc.Execute(context.Background(), "test")
 

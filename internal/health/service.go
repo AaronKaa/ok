@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/AaronKaa/ok/internal/config"
 )
 
 type Notifier interface {
@@ -16,17 +18,17 @@ type Notifier interface {
 type Service struct {
 	checks         map[string]Check
 	results        map[string]Result
-	checker        Checker
+	checkers       map[config.CheckType]Checker
 	notifier       Notifier
 	previousStatus Status
 	mu             sync.RWMutex
 }
 
-func NewService(checks []Check, checker Checker, notifier Notifier) *Service {
+func NewService(checks []Check, checkers map[config.CheckType]Checker, notifier Notifier) *Service {
 	s := &Service{
 		checks:         make(map[string]Check),
 		results:        make(map[string]Result),
-		checker:        checker,
+		checkers:       checkers,
 		notifier:       notifier,
 		previousStatus: StatusPass,
 	}
@@ -61,8 +63,14 @@ func (s *Service) Execute(ctx context.Context, checkID string) {
 		return
 	}
 
+	checker, ok := s.checkers[check.Type]
+	if !ok {
+		slog.Error("no checker for check type", "check_id", checkID, "type", check.Type)
+		return
+	}
+
 	start := time.Now()
-	passed, message, err := s.checker.Execute(ctx, check)
+	passed, message, err := checker.Execute(ctx, check)
 	duration := time.Since(start)
 
 	if err != nil {
