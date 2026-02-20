@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Health Status</title>
-    {{if gt .RefreshInterval 0}}<meta http-equiv="refresh" content="{{.RefreshInterval}}" />{{end}}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -26,12 +25,14 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            transition: background-color 0.3s, color 0.3s;
         }
         .status-indicator {
             width: 1rem;
             height: 1rem;
             border-radius: 50%;
             animation: pulse 2s infinite;
+            transition: background-color 0.3s;
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -45,6 +46,7 @@
             padding: 1.25rem;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             border-left: 4px solid;
+            transition: border-color 0.3s, opacity 0.3s;
         }
         .check-header {
             display: flex;
@@ -62,6 +64,7 @@
             font-size: 0.75rem;
             font-weight: 500;
             text-transform: uppercase;
+            transition: background-color 0.3s, color 0.3s;
         }
         .check-details {
             display: grid;
@@ -109,21 +112,22 @@
             text-transform: uppercase;
             margin-left: 0.5rem;
         }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="status-banner" style="background-color: {{statusBgColor .Response.Status}}; color: {{statusColor .Response.Status}};">
-                <div class="status-indicator" style="background-color: {{statusColor .Response.Status}};"></div>
-                {{.Response.Status}}
+            <div id="status-banner" class="status-banner" style="background-color: {{statusBgColor .Response.Status}}; color: {{statusColor .Response.Status}};">
+                <div id="status-indicator" class="status-indicator" style="background-color: {{statusColor .Response.Status}};"></div>
+                <span id="status-text">{{.Response.Status}}</span>
             </div>
-            <div class="timestamp">Last updated: {{.Response.Timestamp.Format "2006-01-02 15:04:05 MST"}}</div>
+            <div id="timestamp" class="timestamp">Last updated: {{.Response.Timestamp.Format "2006-01-02 15:04:05 MST"}}</div>
         </div>
 
-        <div class="checks">
+        <div id="checks" class="checks">
             {{range .Response.Checks}}
-            <div class="check-card" style="border-left-color: {{statusColor .Status}};">
+            <div class="check-card" data-check-id="{{.ID}}" style="border-left-color: {{statusColor .Status}};">
                 <div class="check-header">
                     <div>
                         <span class="check-title">{{.Title}}</span>
@@ -131,33 +135,209 @@
                     </div>
                     <div class="check-badge" style="background-color: {{statusBgColor .Status}}; color: {{statusColor .Status}};">
                         <div class="status-indicator" style="background-color: {{statusColor .Status}}; width: 0.5rem; height: 0.5rem;"></div>
-                        {{.Status}}
+                        <span class="check-status-text">{{.Status}}</span>
                     </div>
                 </div>
                 <div class="check-details">
                     <div class="detail-item">
                         <span class="detail-label">Last Check</span>
-                        <span class="detail-value">{{if .LastCheck}}{{.LastCheck}}{{else}}Never{{end}}</span>
+                        <span class="detail-value check-last-check">{{if .LastCheck}}{{.LastCheck}}{{else}}Never{{end}}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Age</span>
-                        <span class="detail-value">{{formatAge .AgeSeconds}}</span>
+                        <span class="detail-value check-age">{{formatAge .AgeSeconds}}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Duration</span>
-                        <span class="detail-value">{{formatDuration .DurationMs}}</span>
+                        <span class="detail-value check-duration">{{formatDuration .DurationMs}}</span>
                     </div>
-                    {{if gt .ConsecutiveFailures 0}}
-                    <div class="detail-item">
+                    <div class="detail-item check-failures-item {{if eq .ConsecutiveFailures 0}}hidden{{end}}">
                         <span class="detail-label">Failures</span>
-                        <span class="detail-value">{{.ConsecutiveFailures}}</span>
+                        <span class="detail-value check-failures">{{.ConsecutiveFailures}}</span>
                     </div>
-                    {{end}}
                 </div>
-                {{if .Message}}<div class="check-message">{{.Message}}</div>{{end}}
+                <div class="check-message {{if not .Message}}hidden{{end}}">{{.Message}}</div>
             </div>
             {{end}}
         </div>
     </div>
+
+    {{if gt .RefreshInterval 0}}
+    <script>
+        const REFRESH_INTERVAL = {{.RefreshInterval}} * 1000;
+        const STATUS_COLORS = {
+            pass: '#22c55e',
+            degraded: '#eab308',
+            fail: '#ef4444',
+            default: '#6b7280'
+        };
+        const STATUS_BG_COLORS = {
+            pass: '#dcfce7',
+            degraded: '#fef9c3',
+            fail: '#fee2e2',
+            default: '#f3f4f6'
+        };
+
+        function getStatusColor(status) {
+            return STATUS_COLORS[status] || STATUS_COLORS.default;
+        }
+
+        function getStatusBgColor(status) {
+            return STATUS_BG_COLORS[status] || STATUS_BG_COLORS.default;
+        }
+
+        function formatAge(seconds) {
+            if (seconds < 60) return Math.round(seconds) + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm' + Math.round(seconds % 60) + 's';
+            return Math.floor(seconds / 3600) + 'h' + Math.floor((seconds % 3600) / 60) + 'm';
+        }
+
+        function formatDuration(ms) {
+            if (ms < 1) return (ms * 1000).toFixed(0) + '\u00b5s';
+            return ms.toFixed(0) + 'ms';
+        }
+
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('en-US', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                timeZoneName: 'short', hour12: false
+            }).replace(',', '');
+        }
+
+        async function refresh() {
+            try {
+                const response = await fetch('/health?format=json');
+                const data = await response.json();
+                updateUI(data);
+            } catch (err) {
+                console.error('Failed to refresh:', err);
+            }
+        }
+
+        function updateUI(data) {
+            // Update banner
+            const banner = document.getElementById('status-banner');
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const timestamp = document.getElementById('timestamp');
+
+            banner.style.backgroundColor = getStatusBgColor(data.status);
+            banner.style.color = getStatusColor(data.status);
+            indicator.style.backgroundColor = getStatusColor(data.status);
+            statusText.textContent = data.status;
+            timestamp.textContent = 'Last updated: ' + formatTimestamp(data.timestamp);
+
+            // Update checks
+            const checksContainer = document.getElementById('checks');
+            const existingCards = new Map();
+            checksContainer.querySelectorAll('.check-card').forEach(card => {
+                existingCards.set(card.dataset.checkId, card);
+            });
+
+            // Clear and rebuild in correct order
+            checksContainer.innerHTML = '';
+            data.checks.forEach(check => {
+                let card = existingCards.get(check.id);
+                if (card) {
+                    updateCheckCard(card, check);
+                } else {
+                    card = createCheckCard(check);
+                }
+                checksContainer.appendChild(card);
+            });
+        }
+
+        function updateCheckCard(card, check) {
+            const color = getStatusColor(check.status);
+            const bgColor = getStatusBgColor(check.status);
+
+            card.style.borderLeftColor = color;
+
+            const badge = card.querySelector('.check-badge');
+            badge.style.backgroundColor = bgColor;
+            badge.style.color = color;
+            badge.querySelector('.status-indicator').style.backgroundColor = color;
+            badge.querySelector('.check-status-text').textContent = check.status;
+
+            card.querySelector('.check-last-check').textContent = check.last_check || 'Never';
+            card.querySelector('.check-age').textContent = formatAge(check.age_seconds);
+            card.querySelector('.check-duration').textContent = formatDuration(check.duration_ms);
+
+            const failuresItem = card.querySelector('.check-failures-item');
+            const failures = card.querySelector('.check-failures');
+            if (check.consecutive_failures > 0) {
+                failuresItem.classList.remove('hidden');
+                failures.textContent = check.consecutive_failures;
+            } else {
+                failuresItem.classList.add('hidden');
+            }
+
+            const message = card.querySelector('.check-message');
+            if (check.message) {
+                message.textContent = check.message;
+                message.classList.remove('hidden');
+            } else {
+                message.classList.add('hidden');
+            }
+        }
+
+        function createCheckCard(check) {
+            const color = getStatusColor(check.status);
+            const bgColor = getStatusBgColor(check.status);
+            const criticalBadge = check.critical
+                ? '<span class="critical-badge">Critical</span>'
+                : '<span class="non-critical-badge">Non-critical</span>';
+            const failuresHidden = check.consecutive_failures === 0 ? 'hidden' : '';
+            const messageHidden = !check.message ? 'hidden' : '';
+
+            const div = document.createElement('div');
+            div.className = 'check-card';
+            div.dataset.checkId = check.id;
+            div.style.borderLeftColor = color;
+            div.innerHTML = `
+                <div class="check-header">
+                    <div>
+                        <span class="check-title">${escapeHtml(check.title)}</span>
+                        ${criticalBadge}
+                    </div>
+                    <div class="check-badge" style="background-color: ${bgColor}; color: ${color};">
+                        <div class="status-indicator" style="background-color: ${color}; width: 0.5rem; height: 0.5rem;"></div>
+                        <span class="check-status-text">${check.status}</span>
+                    </div>
+                </div>
+                <div class="check-details">
+                    <div class="detail-item">
+                        <span class="detail-label">Last Check</span>
+                        <span class="detail-value check-last-check">${check.last_check || 'Never'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Age</span>
+                        <span class="detail-value check-age">${formatAge(check.age_seconds)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Duration</span>
+                        <span class="detail-value check-duration">${formatDuration(check.duration_ms)}</span>
+                    </div>
+                    <div class="detail-item check-failures-item ${failuresHidden}">
+                        <span class="detail-label">Failures</span>
+                        <span class="detail-value check-failures">${check.consecutive_failures}</span>
+                    </div>
+                </div>
+                <div class="check-message ${messageHidden}">${escapeHtml(check.message || '')}</div>
+            `;
+            return div;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        setInterval(refresh, REFRESH_INTERVAL);
+    </script>
+    {{end}}
 </body>
 </html>

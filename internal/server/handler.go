@@ -1,8 +1,10 @@
 package server
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -78,10 +80,44 @@ func (h *Handler) buildResponse() HealthResponse {
 		})
 	}
 
+	sortChecks(checks)
+
 	return HealthResponse{
 		Status:    string(status),
 		Timestamp: time.Now(),
 		Checks:    checks,
+	}
+}
+
+// sortChecks sorts checks by severity (fail > degraded > pass), then critical first, then alphabetically.
+func sortChecks(checks []CheckResponse) {
+	slices.SortFunc(checks, func(a, b CheckResponse) int {
+		// Sort by status severity (fail=0, degraded=1, pass=2)
+		if c := cmp.Compare(statusPriority(a.Status), statusPriority(b.Status)); c != 0 {
+			return c
+		}
+		// Critical checks first
+		if a.Critical != b.Critical {
+			if a.Critical {
+				return -1
+			}
+			return 1
+		}
+		// Alphabetically by title
+		return cmp.Compare(a.Title, b.Title)
+	})
+}
+
+func statusPriority(status string) int {
+	switch status {
+	case "fail":
+		return 0
+	case "degraded":
+		return 1
+	case "pass":
+		return 2
+	default:
+		return 3
 	}
 }
 

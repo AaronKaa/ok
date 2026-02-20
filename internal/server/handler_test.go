@@ -207,8 +207,8 @@ func TestHandler_HTMLContainsRefresh(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		body := rec.Body.String()
-		if !strings.Contains(body, `content="10"`) {
-			t.Error("HTML should contain refresh meta tag with 10s interval")
+		if !strings.Contains(body, "setInterval(refresh, REFRESH_INTERVAL)") {
+			t.Error("HTML should contain JavaScript refresh interval")
 		}
 	})
 
@@ -220,8 +220,34 @@ func TestHandler_HTMLContainsRefresh(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		body := rec.Body.String()
-		if strings.Contains(body, "http-equiv=\"refresh\"") {
-			t.Error("HTML should not contain refresh meta tag when interval is 0")
+		if strings.Contains(body, "REFRESH_INTERVAL") {
+			t.Error("HTML should not contain refresh script when interval is 0")
 		}
 	})
+}
+
+func TestSortChecks(t *testing.T) {
+	checks := []CheckResponse{
+		{ID: "a", Title: "Alpha", Status: "pass", Critical: true},
+		{ID: "b", Title: "Beta", Status: "fail", Critical: false},
+		{ID: "c", Title: "Charlie", Status: "degraded", Critical: true},
+		{ID: "d", Title: "Delta", Status: "fail", Critical: true},
+		{ID: "e", Title: "Echo", Status: "pass", Critical: false},
+	}
+
+	sortChecks(checks)
+
+	// Expected order:
+	// 1. fail + critical (Delta)
+	// 2. fail + non-critical (Beta)
+	// 3. degraded + critical (Charlie)
+	// 4. pass + critical (Alpha)
+	// 5. pass + non-critical (Echo)
+
+	expected := []string{"Delta", "Beta", "Charlie", "Alpha", "Echo"}
+	for i, exp := range expected {
+		if checks[i].Title != exp {
+			t.Errorf("checks[%d].Title = %q, want %q", i, checks[i].Title, exp)
+		}
+	}
 }
